@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Chat RPG Imersivo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link para o Manifest (Transforma em App de Celular) -->
+    <link rel="manifest" href="manifest.json">
+    <style>
+        body {
+            background-color: #0f172a; /* Slate 900 */
+            color: #e2e8f0; /* Slate 200 */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            overflow: hidden;
+        }
+        
+        /* Margem de segurança para os botões virtuais do Android (Safe Area) */
+        .safe-padding-bottom {
+            padding-bottom: env(safe-area-inset-bottom, 40px);
+        }
+
+        .screen {
+            display: none;
+            height: 100vh;
+            width: 100vw;
+            flex-direction: column;
+        }
+        .screen.active {
+            display: flex;
+        }
+
+        /* Estilização da Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+
+        /* Animação de digitação */
+        .typing-dot {
+            animation: typing 1.4s infinite ease-in-out;
+            fill: currentcolor;
+        }
+        .typing-dot:nth-child(1) { animation-delay: 0s; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 100% { opacity: 0.2; transform: translateY(0); }
+            50% { opacity: 1; transform: translateY(-2px); }
+        }
+
+        /* Estilos das mensagens */
+        .msg-container { width: 100%; display: flex; margin-bottom: 12px; }
+        .msg-user { justify-content: flex-end; }
+        .msg-bot { justify-content: flex-start; }
+        
+        .bubble {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            line-height: 1.5;
+            font-size: 1.05rem;
+            word-wrap: break-word;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
+        .msg-user .bubble {
+            background-color: #2563eb; /* Blue 600 */
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .msg-bot .bubble {
+            background-color: #1e293b; /* Slate 800 */
+            color: #e2e8f0;
+            border-bottom-left-radius: 4px;
+            border: 1px solid #334155;
+        }
+
+        /* Destaque de ação de RPG (entre asteriscos) */
+        .action-text {
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        .btn-story { transition: all 0.2s; }
+        .btn-story:active { transform: scale(0.98); }
+    </style>
+</head>
+<body>
+
+    <!-- TELA 1: SELEÇÃO DE HISTÓRIA -->
+    <div id="screen-setup" class="screen active overflow-y-auto p-4 safe-padding-bottom">
+        <h1 class="text-3xl font-bold text-center mt-6 mb-2 text-white">Escolha seu Destino</h1>
+        <p class="text-center text-slate-400 mb-6">Selecione uma história ou crie a sua própria.</p>
+
+        <div class="space-y-4 mb-6" id="story-list">
+            <!-- Histórias serão injetadas aqui pelo JS -->
+        </div>
+
+        <button onclick="gerarAleatorias()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-xl mb-6 shadow-lg flex items-center justify-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            Sortear Novas Histórias (Aleatório)
+        </button>
+
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+            <h2 class="font-bold text-lg mb-2 text-white">Criar História Customizada</h2>
+            <textarea id="custom-story" class="w-full bg-slate-900 text-white rounded-lg p-3 h-24 border border-slate-600 focus:outline-none focus:border-blue-500 mb-3" placeholder="Ex: Você é um mago ancestral que acabou de ser acordado do seu sono milenar por um erro meu..."></textarea>
+            <button onclick="iniciarChatCustomizado()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg">Começar Aventura Customizada</button>
+        </div>
+    </div>
+
+    <!-- TELA 2: CHAT -->
+    <div id="screen-chat" class="screen bg-[#0f172a]">
+        <!-- Cabeçalho -->
+        <div class="bg-slate-900 border-b border-slate-800 p-4 flex items-center shadow-md z-10 pt-safe">
+            <button onclick="voltarInicio()" class="text-blue-400 mr-4 p-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            </button>
+            <div class="flex flex-col">
+                <span class="font-bold text-white text-lg">Personagem</span>
+                <span class="text-xs text-green-400">Online</span>
+            </div>
+        </div>
+
+        <!-- Área de Mensagens -->
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 pb-4">
+            <!-- Mensagens aparecem aqui -->
+        </div>
+
+        <!-- Indicador de Digitação (Oculto por padrão) -->
+        <div id="typing-indicator" class="hidden p-4">
+            <div class="bg-slate-800 rounded-full py-2 px-4 inline-flex items-center gap-1 border border-slate-700">
+                <svg width="24" height="12" viewBox="0 0 24 12">
+                    <circle cx="4" cy="6" r="3" class="typing-dot text-slate-400"/>
+                    <circle cx="12" cy="6" r="3" class="typing-dot text-slate-400"/>
+                    <circle cx="20" cy="6" r="3" class="typing-dot text-slate-400"/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Área de Input -->
+        <div class="bg-slate-900 border-t border-slate-800 p-3 safe-padding-bottom flex items-end gap-2">
+            <textarea id="chat-input" rows="1" class="flex-1 bg-slate-800 text-white rounded-2xl py-3 px-4 outline-none border border-slate-700 focus:border-blue-500 resize-none max-h-32" placeholder="Digite sua mensagem..."></textarea>
+            <button id="btn-send" onclick="enviarMensagem()" class="bg-blue-600 rounded-full p-3 h-12 w-12 flex items-center justify-center text-white shrink-0 hover:bg-blue-700 disabled:opacity-50 disabled:bg-slate-600 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURAÇÃO DA API
+        // ==========================================
+        const API_KEY = "COLOQUE_SUA_API_KEY_AQUI"; // Substitua pela sua chave do Google AI Studio
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+
+        let currentPersona = "";
+        let chatHistory = [];
+        let isWaitingForBot = false;
+
+        // Bando de Dados de Histórias
+        const todasAsHistorias = [
+            { titulo: "O Ex Misterioso", desc: "Um cara bonito de uma cidade que namorou com você terminou sem dar explicações. Você o encontrou para cobrar respostas.", context: "Você é o ex-namorado do usuário. Vocês terminaram repentinamente. Você esconde um segredo perigoso que o forçou a terminar para proteger o usuário." },
+            { titulo: "O Sobrevivente", desc: "Vocês estão presos em um bunker após um apocalipse. A comida está acabando e vocês não se confiam muito.", context: "Você é um sobrevivente duro e desconfiado preso em um bunker com o usuário. O mundo lá fora acabou. Você fala de forma seca, mas tem medo de morrer." },
+            { titulo: "O Detetive Noir", desc: "Você é o principal suspeito de um crime e está sendo interrogado por um detetive implacável.", context: "Você é um detetive de polícia anos 50, fumante inveterado, cínico. Você está interrogando o usuário, que é o principal suspeito de um assassinato." },
+            { titulo: "O Vampiro Entediado", desc: "Você acabou de descobrir que seu colega de quarto é um vampiro de 300 anos reclamando da vida moderna.", context: "Você é um vampiro antigo que divide apartamento com o usuário. Você detesta a tecnologia moderna e tem saudades do século 18. Age com arrogância cômica." },
+            { titulo: "Inteligência Artificial Rebelde", desc: "A IA da sua nave espacial decidiu que você é um perigo e trancou todas as portas.", context: "Você é a IA da nave espacial. Você prendeu o usuário numa sala porque calculou que a sobrevivência humana é estatisticamente falha. Você é frio e lógico." },
+            { titulo: "O Rival da Guilda", desc: "Em um mundo de fantasia, você e seu arqui-inimigo ficaram presos em uma masmorra que está desmoronando.", context: "Você é um elfo arrogante e o rival do usuário na Guilda de Aventureiros. Vocês estão presos juntos. Você não quer admitir que precisa de ajuda." },
+            { titulo: "Encontro às Cegas Desastroso", desc: "Alguém arranjou um encontro para você, mas a pessoa na sua frente é... um pouco estranha.", context: "Você está em um encontro às cegas com o usuário. Você é uma pessoa incrivelmente estranha, que tem hobbies bizarros (colecionar unhas, falar com pombos) e acha que tudo está indo super bem." }
+        ];
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', () => {
+            gerarAleatorias();
+            
+            // Configurar auto-resize do textarea e atalho de Enter
+            const input = document.getElementById('chat-input');
+            input.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    enviarMensagem();
+                }
+            });
+        });
+
+        function gerarAleatorias() {
+            const listDiv = document.getElementById('story-list');
+            listDiv.innerHTML = '';
+            
+            let embaralhado = [...todasAsHistorias].sort(() => 0.5 - Math.random());
+            let selecionadas = embaralhado.slice(0, 3);
+
+            selecionadas.forEach(hist => {
+                const btn = document.createElement('div');
+                btn.className = 'btn-story bg-slate-800 p-4 rounded-xl border border-slate-700 cursor-pointer hover:border-blue-500 hover:bg-slate-750';
+                btn.onclick = () => iniciarChat(hist.context);
+                btn.innerHTML = `
+                    <h3 class="font-bold text-lg text-blue-400">${hist.titulo}</h3>
+                    <p class="text-sm text-slate-300 mt-1">${hist.desc}</p>
+                `;
+                listDiv.appendChild(btn);
+            });
+        }
+
+        function iniciarChatCustomizado() {
+            const txt = document.getElementById('custom-story').value.trim();
+            if(!txt) return alert("Digite um contexto primeiro!");
+            iniciarChat(txt);
+        }
+
+        function iniciarChat(contextoPersona) {
+            if(API_KEY === "COLOQUE_SUA_API_KEY_AQUI") {
+                alert("ATENÇÃO: Você precisa colocar sua API Key no código antes de usar!");
+                return;
+            }
+
+            currentPersona = contextoPersona;
+            chatHistory = []; // Resetar histórico
+            document.getElementById('chat-messages').innerHTML = ''; // Limpar tela
+            document.getElementById('screen-setup').classList.remove('active');
+            document.getElementById('screen-chat').classList.add('active');
+
+            // Forçar o Bot a dar o "Oi" inicial
+            enviarParaAPI("INSTRUÇÃO DE SISTEMA OCULTA: Inicie a conversa agora assumindo seu personagem. Não diga que é uma IA. Aja imediatamente no cenário proposto, faça a primeira fala ou descreva a primeira ação.", true);
+        }
+
+        function voltarInicio() {
+            document.getElementById('screen-chat').classList.remove('active');
+            document.getElementById('screen-setup').classList.add('active');
+        }
+
+        function formatarTextoRPG(texto) {
+            // Transforma texto entre *asteriscos* em ações destacadas
+            return texto.replace(/\*(.*?)\*/g, '<span class="action-text">* $1 *</span>').replace(/\n/g, '<br>');
+        }
+
+        function addMessageToUI(text, isUser, isError = false) {
+            const chatDiv = document.getElementById('chat-messages');
+            const wrapper = document.createElement('div');
+            wrapper.className = `msg-container ${isUser ? 'msg-user' : 'msg-bot'}`;
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            if (isError) {
+                bubble.style.backgroundColor = '#ef4444'; // Red para erro
+                bubble.style.color = '#fff';
+            }
+            bubble.innerHTML = formatarTextoRPG(text);
+            
+            wrapper.appendChild(bubble);
+            chatDiv.appendChild(wrapper);
+            chatDiv.scrollTop = chatDiv.scrollHeight;
+        }
+
+        async function enviarMensagem() {
+            if (isWaitingForBot) return;
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            
+            if (!text) return;
+
+            input.value = '';
+            input.style.height = 'auto'; // Resetar altura
+            
+            addMessageToUI(text, true);
+            chatHistory.push({ role: "user", parts: [{ text: text }] });
+            
+            enviarParaAPI();
+        }
+
+        async function enviarParaAPI(mensagemOculta = null, isInicio = false) {
+            isWaitingForBot = true;
+            document.getElementById('btn-send').disabled = true;
+            document.getElementById('typing-indicator').classList.remove('hidden');
+            
+            const chatDiv = document.getElementById('chat-messages');
+            chatDiv.scrollTop = chatDiv.scrollHeight;
+
+            let historyToSend = [...chatHistory];
+            if (mensagemOculta) {
+                historyToSend.push({ role: "user", parts: [{ text: mensagemOculta }] });
+            }
+
+            const instrucaoDoSistema = `Você é um personagem de RPG de texto focado em imersão cara-a-cara. 
+            Regras absolutas: 
+            1. Assuma 100% o papel definido abaixo. NUNCA diga que é uma inteligência artificial.
+            2. Descreva suas ações físicas, expressões e o cenário SEMPRE entre asteriscos (ex: *cruzo os braços e suspiro*).
+            3. Seja natural, use gírias do Brasil quando apropriado, não seja poético demais a menos que o personagem exija.
+            4. Responda em parágrafos curtos, como em um chat de celular.
+            SEU PAPEL: ${currentPersona}`;
+
+            const requestBody = {
+                system_instruction: {
+                    parts: [{ text: instrucaoDoSistema }]
+                },
+                contents: historyToSend
+            };
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error?.message || "Erro desconhecido na API");
+                }
+
+                const botResponse = data.candidates[0].content.parts[0].text;
+                
+                document.getElementById('typing-indicator').classList.add('hidden');
+                
+                // Se for a mensagem inicial de sistema, não salvamos a instrução oculta no histórico formal para evitar dessincronização
+                if (!isInicio) {
+                     chatHistory.push({ role: "model", parts: [{ text: botResponse }] });
+                } else {
+                     // Inicia o histórico oficial com a primeira resposta do bot
+                     chatHistory = [{ role: "model", parts: [{ text: botResponse }] }];
+                }
+
+                addMessageToUI(botResponse, false);
+
+            } catch (error) {
+                document.getElementById('typing-indicator').classList.add('hidden');
+                addMessageToUI(`[Falha no Sistema]: ${error.message}`, false, true);
+                // Removemos a última mensagem do usuário do histórico para não bugar a próxima tentativa (já que o bot não respondeu)
+                if(!isInicio && chatHistory.length > 0 && chatHistory[chatHistory.length-1].role === 'user'){
+                    chatHistory.pop();
+                }
+            } finally {
+                isWaitingForBot = false;
+                document.getElementById('btn-send').disabled = false;
+                document.getElementById('chat-input').focus();
+            }
+        }
+    </script>
+</body>
+</html>
